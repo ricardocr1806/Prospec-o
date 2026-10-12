@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prospecção</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #1b1f24; --muted: #66707a; --line: #e2e5e9;
+    --accent: #2563eb; --danger: #dc2626; --ok: #16a34a; --warn: #d97706;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111418; --card: #1a1f25; --text: #e8eaed; --muted: #9aa3ad; --line: #2b323a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  header { position: sticky; top: 0; z-index: 2; background: var(--card); border-bottom: 1px solid var(--line); padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  header h1 { font-size: 18px; margin: 0 12px 0 0; }
+  input, select, textarea, button { font: inherit; color: inherit; }
+  input, select, textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; }
+  button { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: var(--danger); }
+  #busca { flex: 1; min-width: 160px; }
+  .stats { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 16px 0; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+  .stat b { display: block; font-size: 20px; }
+  .stat.on { outline: 2px solid var(--accent); }
+  .stat small { color: var(--muted); }
+  main { padding: 12px 16px 80px; display: grid; gap: 10px; }
+  .lead { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .lead .top { display: flex; justify-content: space-between; gap: 8px; align-items: start; }
+  .lead h3 { margin: 0; font-size: 16px; }
+  .lead .meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .lead .notas { margin: 8px 0 0; white-space: pre-wrap; font-size: 14px; }
+  .lead .acoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .lead .acoes button, .lead .acoes a { font-size: 13px; padding: 6px 10px; }
+  .lead .acoes a { border: 1px solid var(--line); border-radius: 8px; text-decoration: none; color: inherit; }
+  .tag { font-size: 12px; padding: 2px 8px; border-radius: 99px; background: var(--bg); border: 1px solid var(--line); white-space: nowrap; }
+  .atrasado { color: var(--danger); font-weight: 600; }
+  .hoje { color: var(--warn); font-weight: 600; }
+  .vazio { text-align: center; color: var(--muted); padding: 40px 0; }
+  dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--card); color: var(--text); width: min(520px, calc(100% - 32px)); padding: 16px; }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  form .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  form label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  form .full { grid-column: 1 / -1; }
+  form .botoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+  @media (max-width: 520px) { form .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Prospecção</h1>
+  <input id="busca" type="search" placeholder="Buscar nome, empresa, cidade…">
+  <button class="primary" id="novo">+ Lead</button>
+  <button id="exportar">Exportar CSV</button>
+  <button id="importarBtn">Importar CSV</button>
+  <input id="importar" type="file" accept=".csv,text/csv" hidden>
+</header>
+
+<div class="stats" id="stats"></div>
+<main id="lista"></main>
+
+<dialog id="dlg">
+  <form id="form" method="dialog">
+    <div class="grid">
+      <label class="full">Nome *<input name="nome" required></label>
+      <label>Empresa<input name="empresa"></label>
+      <label>Cidade<input name="cidade"></label>
+      <label>WhatsApp<input name="telefone" inputmode="tel" placeholder="11999999999"></label>
+      <label>E-mail<input name="email" type="email"></label>
+      <label>Instagram<input name="instagram" placeholder="@perfil"></label>
+      <label>Origem<input name="origem" placeholder="Indicação, Google Maps…"></label>
+      <label>Status<select name="status"></select></label>
+      <label>Próximo contato<input name="proximo" type="date"></label>
+      <label class="full">Valor estimado (R$)<input name="valor" type="number" min="0" step="0.01"></label>
+      <label class="full">Notas<textarea name="notas" rows="3"></textarea></label>
+    </div>
+    <div class="botoes">
+      <button type="button" class="danger" id="excluir">Excluir</button>
+      <button type="button" id="cancelar">Cancelar</button>
+      <button class="primary" value="salvar">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const STATUS = ['Novo', 'Contatado', 'Respondeu', 'Reunião', 'Proposta', 'Fechado', 'Perdido'];
+const CAMPOS = ['nome', 'empresa', 'cidade', 'telefone', 'email', 'instagram', 'origem', 'status', 'proximo', 'valor', 'notas', 'criado'];
+const CHAVE = 'prospeccao.leads';
+
+let leads = carregar();
+let filtroStatus = '';
+let editando = null;
+
+function carregar() {
+  try { return JSON.parse(localStorage.getItem(CHAVE)) || []; } catch { return []; }
+}
+function salvar() {
+  try { localStorage.setItem(CHAVE, JSON.stringify(leads)); } catch {}
+}
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const hojeISO = () => new Date().toISOString().slice(0, 10);
+const brl = v => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const dataBR = iso => iso.split('-').reverse().join('/');
+
+function whatsLink(l) {
+  let n = (l.telefone || '').replace(/\D/g, '');
+  if (!n) return '';
+  if (n.length <= 11) n = '55' + n;
+  const msg = `Olá ${l.nome.split(' ')[0]}, tudo bem?`;
+  return `https://wa.me/${n}?text=${encodeURIComponent(msg)}`;
+}
+
+function render() {
+  const termo = $('#busca').value.trim().toLowerCase();
+  const hoje = hojeISO();
+
+  const contagem = Object.fromEntries(STATUS.map(s => [s, 0]));
+  leads.forEach(l => contagem[l.status] = (contagem[l.status] || 0) + 1);
+  const pendentes = leads.filter(l => l.proximo && l.proximo <= hoje && !['Fechado', 'Perdido'].includes(l.status)).length;
+  const fechado = leads.filter(l => l.status === 'Fechado').reduce((t, l) => t + (Number(l.valor) || 0), 0);
+
+  $('#stats').innerHTML =
+    `<div class="stat ${filtroStatus === '' ? 'on' : ''}" data-s=""><small>Todos</small><b>${leads.length}</b></div>` +
+    `<div class="stat ${filtroStatus === '!' ? 'on' : ''}" data-s="!"><small>Follow-up hoje/atrasado</small><b>${pendentes}</b></div>` +
+    STATUS.map(s => `<div class="stat ${filtroStatus === s ? 'on' : ''}" data-s="${s}"><small>${s}</small><b>${contagem[s]}</b></div>`).join('') +
+    `<div class="stat"><small>Fechado (R$)</small><b>${brl(fechado)}</b></div>`;
+
+  let lista = leads.filter(l => {
+    if (filtroStatus === '!') { if (!(l.proximo && l.proximo <= hoje && !['Fechado', 'Perdido'].includes(l.status))) return false; }
+    else if (filtroStatus && l.status !== filtroStatus) return false;
+    if (!termo) return true;
+    return [l.nome, l.empresa, l.cidade, l.origem, l.notas, l.instagram].join(' ').toLowerCase().includes(termo);
+  });
+  lista.sort((a, b) => (a.proximo || '9999').localeCompare(b.proximo || '9999') || a.nome.localeCompare(b.nome));
+
+  if (!lista.length) {
+    $('#lista').innerHTML = `<p class="vazio">${leads.length ? 'Nenhum lead encontrado.' : 'Nenhum lead ainda. Clique em “+ Lead” para começar.'}</p>`;
+    return;
+  }
+
+  $('#lista').innerHTML = lista.map(l => {
+    const i = leads.indexOf(l);
+    let prox = '';
+    if (l.proximo) {
+      const cls = l.proximo < hoje ? 'atrasado' : l.proximo === hoje ? 'hoje' : '';
+      prox = ` · <span class="${cls}">Próximo: ${dataBR(l.proximo)}</span>`;
+    }
+    const wa = whatsLink(l);
+    const ig = (l.instagram || '').replace(/^@/, '');
+    return `<div class="lead">
+      <div class="top">
+        <div>
+          <h3>${esc(l.nome)}</h3>
+          <div class="meta">${esc([l.empresa, l.cidade, l.origem].filter(Boolean).join(' · '))}${l.valor ? ' · ' + brl(l.valor) : ''}${prox}</div>
+        </div>
+        <span class="tag">${esc(l.status)}</span>
+      </div>
+      ${l.notas ? `<p class="notas">${esc(l.notas)}</p>` : ''}
+      <div class="acoes">
+        ${wa ? `<a href="${wa}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
+        ${l.email ? `<a href="mailto:${esc(l.email)}">E-mail</a>` : ''}
+        ${ig ? `<a href="https://instagram.com/${encodeURIComponent(ig)}" target="_blank" rel="noopener">Instagram</a>` : ''}
+        <button data-avancar="${i}">Avançar ▸</button>
+        <button data-editar="${i}">Editar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function abrir(i) {
+  editando = i;
+  const l = i == null ? { status: 'Novo' } : leads[i];
+  const f = $('#form');
+  CAMPOS.forEach(c => { if (f.elements[c]) f.elements[c].value = l[c] ?? ''; });
+  $('#excluir').hidden = i == null;
+  $('#dlg').showModal();
+  f.elements.nome.focus();
+}
+
+$('#form').elements.status.innerHTML = STATUS.map(s => `<option>${s}</option>`).join('');
+
+$('#form').addEventListener('submit', () => {
+  const f = $('#form');
+  const l = editando == null ? { criado: hojeISO() } : leads[editando];
+  CAMPOS.forEach(c => { if (f.elements[c]) l[c] = f.elements[c].value.trim(); });
+  if (editando == null) leads.push(l);
+  salvar(); render();
+});
+$('#cancelar').onclick = () => $('#dlg').close();
+$('#excluir').onclick = () => {
+  if (editando != null && confirm('Excluir este lead?')) {
+    leads.splice(editando, 1); salvar(); $('#dlg').close(); render();
+  }
+};
+$('#novo').onclick = () => abrir(null);
+$('#busca').oninput = render;
+
+$('#stats').onclick = e => {
+  const el = e.target.closest('[data-s]');
+  if (!el) return;
+  filtroStatus = el.dataset.s; render();
+};
+$('#lista').onclick = e => {
+  const ed = e.target.closest('[data-editar]');
+  if (ed) return abrir(Number(ed.dataset.editar));
+  const av = e.target.closest('[data-avancar]');
+  if (av) {
+    const l = leads[Number(av.dataset.avancar)];
+    const pos = STATUS.indexOf(l.status);
+    if (pos < STATUS.indexOf('Fechado')) l.status = STATUS[pos + 1];
+    salvar(); render();
+  }
+};
+
+// CSV
+function paraCSV() {
+  const linha = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  return [CAMPOS.join(';'), ...leads.map(l => CAMPOS.map(c => linha(l[c])).join(';'))].join('\n');
+}
+function deCSV(texto) {
+  const linhas = [];
+  let campo = '', linha = [], aspas = false;
+  const sep = texto.split('\n')[0].includes(';') ? ';' : ',';
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i];
+    if (aspas) {
+      if (c === '"' && texto[i + 1] === '"') { campo += '"'; i++; }
+      else if (c === '"') aspas = false;
+      else campo += c;
+    } else if (c === '"') aspas = true;
+    else if (c === sep) { linha.push(campo); campo = ''; }
+    else if (c === '\n') { linha.push(campo); linhas.push(linha); linha = []; campo = ''; }
+    else if (c !== '\r') campo += c;
+  }
+  if (campo || linha.length) { linha.push(campo); linhas.push(linha); }
+  const [cab, ...dados] = linhas;
+  const nomes = cab.map(h => h.trim().replace(/^﻿/, '').toLowerCase());
+  return dados.filter(r => r.some(Boolean)).map(r => {
+    const l = {};
+    nomes.forEach((h, i) => { if (CAMPOS.includes(h)) l[h] = (r[i] || '').trim(); });
+    if (!STATUS.includes(l.status)) l.status = 'Novo';
+    if (!l.criado) l.criado = hojeISO();
+    return l;
+  }).filter(l => l.nome);
+}
+$('#exportar').onclick = () => {
+  const blob = new Blob(['﻿' + paraCSV()], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `leads-${hojeISO()}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+$('#importarBtn').onclick = () => $('#importar').click();
+$('#importar').onchange = async e => {
+  const arq = e.target.files[0];
+  if (!arq) return;
+  const novos = deCSV(await arq.text());
+  leads.push(...novos); salvar(); render();
+  alert(`${novos.length} lead(s) importado(s).`);
+  e.target.value = '';
+};
+
+render();
+</script>
+</body>
+</html>
