@@ -147,7 +147,7 @@ function render() {
     let prox = '';
     if (l.proximo) {
       const cls = l.proximo < hoje ? 'atrasado' : l.proximo === hoje ? 'hoje' : '';
-      prox = ` · <span class="${cls}">Próximo: ${dataBR(l.proximo)}</span>`;
+      prox = `<span class="${cls}">Próximo: ${dataBR(l.proximo)}</span>`;
     }
     const wa = whatsLink(l);
     const ig = (l.instagram || '').replace(/^@/, '');
@@ -155,7 +155,7 @@ function render() {
       <div class="top">
         <div>
           <h3>${esc(l.nome)}</h3>
-          <div class="meta">${esc([l.empresa, l.cidade, l.origem].filter(Boolean).join(' · '))}${l.valor ? ' · ' + brl(l.valor) : ''}${prox}</div>
+          <div class="meta">${[...[l.empresa, l.cidade, l.origem].filter(Boolean).map(esc), l.valor ? brl(l.valor) : '', prox].filter(Boolean).join(' · ')}</div>
         </div>
         <span class="tag">${esc(l.status)}</span>
       </div>
